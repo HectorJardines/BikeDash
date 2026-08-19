@@ -1,0 +1,9 @@
+{
+    "configurations": [
+        {
+            "name": "nRF Connect",
+            "configurationProvider": "nordic-semiconductor.nrf-connect"
+        }
+    ],
+    "version": 4
+}
