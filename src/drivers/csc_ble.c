@@ -8,6 +8,24 @@
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/kernel.h>
 
+LOG_MODULE_REGISTER(csc_ble, LOG_LEVEL_DBG);
+
+
+/***********************
+ * MACROS/TYPEDEFS
+ ***********************/
+#define IND_STRUCT_LEN      (3U)
+#define MAX_IND_DATA_LEN    (5U)
+#define IND_BUF_LEN         (IND_STRUCT_LEN + MAX_IND_DATA_LEN)
+
+#define IND_ONGOING (1U)
+#define IND_READY   (0U)
+
+typedef struct {
+    struct bt_gatt_indicate_params ind_params;
+    uint8_t ind_params_data_buf[MAX_IND_DATA_LEN];
+    uint8_t ind_ongoing;
+} csc_ind_handle_t;
 
 /*************************
  * STATIC DECLARATIONS
@@ -16,6 +34,7 @@ static void csc_meas_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t v
 static void ctrl_point_indicate(struct bt_conn *conn, uint8_t req_op, uint8_t status,
                                 const void *data, uint16_t data_len);
 static void ctrl_point_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value);
+static void csc_cp_indicate_cb(struct bt_conn *conn, struct bt_gatt_indicate_params *params, uint8_t err);
 
 static ssize_t write_ctrl_point(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf,
                                 uint16_t len, uint16_t offset, uint8_t flags);
@@ -30,7 +49,6 @@ static void on_recycled(void);
 static void bt_ready(void);
 
 
-static struct csc_sensor_info_t sens;
 static const struct bt_data scan_data[] = { // scan response packets
     BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 };
@@ -39,9 +57,10 @@ static const struct bt_data adv_data[] = {
     BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_CSC_VAL)), // ADV CSC SERVICE
 };
 
-static const struct bt_le_adv_param adv_params;
-static struct bt_gatt_indicate_params ind_params;
 
+static struct csc_sensor_info_t sens;
+static struct bt_le_adv_param adv_params;
+static csc_ind_handle_t h_ind;
 static struct bt_conn_cb conn_cbs = {
     .connected          = on_connected,
     .disconnected       = on_disconnected,
@@ -72,11 +91,15 @@ BT_GATT_SERVICE_DEFINE(csc_svc,
  */
 uint32_t csc_ble_init(void) {
     int err = bt_enable(NULL);
-    if (err)
-        printk("ERROR ENABLING BT PERIPHERAL: %d\n\r", err); return err;
+    if (err) {
+        printk("ERROR ENABLING BT PERIPHERAL: %d\n\r", err); 
+        return err;
+    }
     err = bt_conn_cb_register(&conn_cbs);
-    if (err) 
-        printk("ERROR SETTING CONN CBS\n\r"); return err;
+    if (err) {
+        printk("ERROR SETTING CONN CBS\n\r"); 
+        return err;
+    }
     
     bt_ready();
 }
@@ -111,7 +134,7 @@ void csc_ble_measurement_notify(uint32_t cwr, uint16_t lwet, uint32_t ccr, uint1
         cr_nfy.cumulative_cr = ccr;
         cr_nfy.last_cet = lcet;
 
-        memcpy((void *)meas_nfy->data + len, (const void *)&cr_nfy, sizeof(cr_nfy));
+        memcpy((void *)(meas_nfy->data + len), (const void *)&cr_nfy, sizeof(cr_nfy));
     }
 
     bt_gatt_notify(sens.sens_conn, &csc_svc.attrs[1], buf, sizeof(buf));
@@ -153,19 +176,34 @@ static void csc_meas_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t v
 static void ctrl_point_indicate(struct bt_conn *conn, uint8_t req_op, uint8_t status,
                                 const void *data, uint16_t data_len) 
 {
+    if (!sens.ctrl_point_configured) {
+        LOG_ERR("INDICATE NOT CONF\n\r");
+        return;
+    }
+
+    if (h_ind.ind_ongoing == IND_ONGOING) {
+        LOG_WRN("INDICATE ONGOING, CANNOT START ANOTHER INDICATE EVENT\n\r");
+        return;
+    }
+
     struct sc_ctrl_point_indicate *ind;
-    uint8_t buf[sizeof(ind) + data_len];
+    memset((void *)h_ind.ind_params_data_buf, 0, IND_BUF_LEN);
 
-
-    ind = (void *)buf;
+    ind = (void *)h_ind.ind_params_data_buf;
     ind->op = SC_CP_OP_RESPONSE;
     ind->req_op = req_op;
     ind->status = status;
     
     if (data && data_len > 0)
         memcpy((void *)ind->data, data, data_len);
+    
+    h_ind.ind_params.attr = &csc_svc.attrs[8];
+    h_ind.ind_params.len = IND_STRUCT_LEN + data_len;
+    h_ind.ind_params.data = h_ind.ind_params_data_buf;
+    h_ind.ind_params.func = csc_cp_indicate_cb;
+    h_ind.ind_params.destroy = NULL;
 
-    bt_gatt_notify(conn, &csc_svc.attrs[8], buf, sizeof(buf)); // NOTIFY BUT WE SET INDICATE?
+    bt_gatt_indicate(conn, &h_ind.ind_params); // NOTIFY BUT WE SET INDICATE?
 }
 
 /**
@@ -176,6 +214,15 @@ static void ctrl_point_indicate(struct bt_conn *conn, uint8_t req_op, uint8_t st
  */
 static void ctrl_point_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value) {
     sens.ctrl_point_configured = value == BT_GATT_CCC_INDICATE;
+}
+
+
+static void csc_cp_indicate_cb(struct bt_conn *conn, struct bt_gatt_indicate_params *params, uint8_t err) {
+    if (err)
+        LOG_ERR("ERROR IN INDICATE EVENT: %d\n\r", err);
+    else
+        LOG_DBG("SUCCESFUL INDICATION COMPLETE\n\r");
+    h_ind.ind_ongoing = IND_READY;
 }
 
 
@@ -273,8 +320,10 @@ static ssize_t read_csc_feature(struct bt_conn *conn, const struct bt_gatt_attr 
  * @brief
  */
 static void on_connected(struct bt_conn *conn, uint8_t err) {
-    if (err)
-        LOG_ERR("CONNECTION FAILED: %d\n\r", err); return;
+    if (err) {
+        LOG_ERR("CONNECTION FAILED: %d\n\r", err); 
+        return;
+    }
     LOG_INF("CONNECTION ESTABLISHED\n\r");
     sens.sens_conn = bt_conn_ref(conn);
 }
