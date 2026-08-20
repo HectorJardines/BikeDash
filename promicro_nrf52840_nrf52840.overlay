@@ -7,8 +7,10 @@
 	pinctrl-names = "default", "sleep";
 	bmi160: bmi160@0 {
 		compatible = "bosch,bmi160";
+		status = "okay";
 		reg = <0>;
 		spi-max-frequency = <8000000>;
+		int-gpios = <&gpio0 29 GPIO_ACTIVE_LOW>;
 	};
 };
 
