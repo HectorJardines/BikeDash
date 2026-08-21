@@ -8,7 +8,8 @@ target_sources(app PRIVATE
 src/main.c
 src/drivers/accel.c
 src/drivers/csc_ble.c
-src/common/trace.c
+src/drivers/csc_evt.c
+src/app/csc_sensor.c
 )
 target_include_directories(app PRIVATE 
 include

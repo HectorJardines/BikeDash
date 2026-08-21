@@ -31,3 +31,21 @@
 		};
 	};
 };
+
+&rtc2 {
+	status = "okay";
+};
+
+/ {
+	buttons {
+		compatible = "gpio-keys";
+		btn_mode: btn_1 {
+			gpios = <&gpio0 10 GPIO_ACTIVE_LOW>;
+			label = "Btn Mode Toggle";
+		};
+		btn_adv: btn_2 {
+			gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;
+			label = "Btn Adv Start";
+		};
+	};
+};

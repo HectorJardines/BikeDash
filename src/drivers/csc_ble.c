@@ -53,7 +53,7 @@ static const struct bt_data scan_data[] = { // scan response packets
     BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 };
 static const struct bt_data adv_data[] = {
-    BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)), // NO BT CLASSIC SUPPORT + GENERAL ADV
+    BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_LIMITED | BT_LE_AD_NO_BREDR)), // NO BT CLASSIC SUPPORT + GENERAL ADV
     BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_CSC_VAL)), // ADV CSC SERVICE
 };
 
@@ -64,7 +64,6 @@ static csc_ind_handle_t h_ind;
 static struct bt_conn_cb conn_cbs = {
     .connected          = on_connected,
     .disconnected       = on_disconnected,
-    .recycled           = on_recycled
 };
 /*********************
  * PUBLIC APIs
@@ -89,7 +88,7 @@ BT_GATT_SERVICE_DEFINE(csc_svc,
  * 
  * 
  */
-uint32_t csc_ble_init(void) {
+int csc_ble_init(void) {
     int err = bt_enable(NULL);
     if (err) {
         printk("ERROR ENABLING BT PERIPHERAL: %d\n\r", err); 
@@ -100,8 +99,20 @@ uint32_t csc_ble_init(void) {
         printk("ERROR SETTING CONN CBS\n\r"); 
         return err;
     }
-    
-    bt_ready();
+    return err;
+}
+
+
+/**
+ * @brief Starts BLE peripheral advertising with timeout
+ * 
+ * This function begins the BLE peripheral ADV phase, if no
+ * connection is established within 30 seconds timeout and 
+ * start will need to be triggered again
+ * 
+ */
+void csc_ble_start_adv(void) {
+
 }
 
 
@@ -338,16 +349,6 @@ static void on_disconnected(struct bt_conn *conn, uint8_t reason) {
     bt_conn_unref(conn);
     sens.sens_conn = NULL;
 }
-
-
-
-/**
- * @brief
- */
-static void on_recycled(void) {
-    bt_ready();
-}
-
 
 
 /**

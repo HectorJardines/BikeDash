@@ -1,6 +1,7 @@
 #ifndef _CSC_EVT_H
 #define _CSC_EVT_H
 
+
 /*******************
  * TYPEDEFS/MACROS
  *******************/
@@ -19,7 +20,15 @@ typedef void(*csv_evt_tick_cb)(void);
  * 
  * 
  */
-void csc_evt_init(void);
+int csc_evt_init(void);
+
+
+/**
+ * @brief Enables the timer peripheral
+ * 
+ * 
+ */
+void csc_evt_tim_enable(void);
 
 
 /**
@@ -28,7 +37,6 @@ void csc_evt_init(void);
  * 
  */
 void csc_evt_tim_reset(void);
-
 
 /**
  * @brief Registers the TICK inc callback function

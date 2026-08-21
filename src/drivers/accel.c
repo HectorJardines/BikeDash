@@ -26,8 +26,6 @@ static void accel_data_ready_cb(const struct device *dev,
 					 const struct sensor_trigger *trigger);
 static void accel_data_to_revs(uint32_t axis_a, uint32_t axis_b);
 
-
-
 // static struct spi_dt_spec spispec = SPI_DT_SPEC_GET(DT_NODELABEL(bmi160), SPIOP);
 static const struct device *dev_bmi160 = DEVICE_DT_GET_ANY(bosch_bmi160);
 static const struct sensor_trigger bmi160_trig = {.type = SENSOR_TRIG_DATA_READY, .chan = SENSOR_CHAN_ACCEL_XYZ};
@@ -46,7 +44,7 @@ static struct acc_rev_handle h_rev;
  * 
  * @param config_mode config mode for accel (cadence/speed)
  */
-uint8_t accel_init(enum accel_mode_e) {
+uint8_t accel_init(void) {
     uint8_t ret = ACCEL_OK;
 
     if (dev_bmi160 == NULL) {
@@ -66,12 +64,52 @@ uint8_t accel_init(enum accel_mode_e) {
         return ret;
     }
 
+    
+    h_rev.initialized = 1;
+
     LOG_DBG("ACCEL CONFIGURED SUCCESSFULLY\n\r");
     return ret;
 }
 
 
 
+/**
+ * @brief Sets the accelerometer mode
+ * 
+ * This functions sets the accelerometer mode 
+ * to either cadence mode or speed mode. Currently
+ * they are more or less the same, may make some 
+ * adjustments to configurations
+ * 
+ */
+uint8_t accel_toggle_mode(void) {
+    if (h_rev.accel_mode == ACCEL_MODE_CADENCE)
+        h_rev.accel_mode = ACCEL_MODE_SPEED;
+    else
+        h_rev.accel_mode = ACCEL_MODE_CADENCE;
+
+    return h_rev.accel_mode;
+}
+
+
+
+/**
+ * @brief Retrieves the Cumulative Wheel/Crank Revolutions
+ * 
+ */
+uint8_t accel_get_cxr(uint32_t *cxr) {
+    if (!h_rev.initialized) {
+        LOG_WRN("ACCEL NOT INITIALIZED, CANNOT RETRIEVE CXR\n\r");
+        return 1;
+    }
+
+    if (h_rev.accel_mode == ACCEL_MODE_CADENCE)
+        *cxr = h_rev.cr_inf.ccr;
+    else
+        *cxr = h_rev.wr_inf.cwr;
+
+    return 0;
+}
 
 
 
@@ -85,7 +123,7 @@ uint8_t accel_init(enum accel_mode_e) {
  * 
  */
 static void accel_configure(void) {
-    
+
 }
 
 

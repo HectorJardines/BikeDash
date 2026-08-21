@@ -119,7 +119,19 @@ struct sc_ctrl_point_indicate {
  * 
  * 
  */
-void ble_init(void);
+int csc_ble_init(void);
+
+
+
+/**
+ * @brief Starts BLE peripheral advertising with timeout
+ * 
+ * This function begins the BLE peripheral ADV phase, if no
+ * connection is established within 30 seconds timeout and 
+ * start will need to be triggered again
+ * 
+ */
+void csc_ble_start_adv(void);
 
 
 /**
