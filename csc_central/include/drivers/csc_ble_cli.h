@@ -1,25 +1,18 @@
-#ifndef _BLE_H
-#define _BLE_H
+#ifndef _CSC_CLI_H
+#define _CSC_CLI_H
 
-#include <zephyr/bluetooth/bluetooth.h>
-#include <zephyr/bluetooth/hci.h>
-#include <zephyr/bluetooth/conn.h>
-#include <zephyr/bluetooth/uuid.h>
-#include <zephyr/bluetooth/gatt.h>
-#include <zephyr/bluetooth/services/bas.h>
+#include <stdint.h>
 
-/****************
+/*******************
  * MACROS
- *****************/
+ ******************/
 #define CSC_SUPPORTED_LOCATIONS		{CSC_LOC_FRONT_WHEEL, \
                                     CSC_LOC_REAR_WHEEL, \
                                     CSC_LOC_LEFT_CRANK, \
                                     CSC_LOC_RIGHT_CRANK }
 
-#define CSC_FEATURES_CR		(CSC_FEAT_CRANK_REV | \
-					        CSC_FEAT_MULTI_SENSORS)
-
-#define CSC_FEATURES_WR     (CSC_FEAT_WHEEL_REV | \
+#define CSC_FEATURE			(CSC_FEAT_WHEEL_REV | \
+					        CSC_FEAT_CRANK_REV | \
 					        CSC_FEAT_MULTI_SENSORS)
 
 /* CSC Sensor Locations */
@@ -65,17 +58,13 @@
 #define CSC_WHEEL_REV_DATA_PRESENT	BIT(0)
 #define CSC_CRANK_REV_DATA_PRESENT	BIT(1)
 
-
-struct csc_sensor_info_t {
-    struct bt_conn *sens_conn;
-    uint32_t c_wheel_revs;
-    uint8_t supported_locs[4];
-    uint8_t sensor_loc;
-    uint8_t ctrl_point_configured;
-    uint8_t meas_notify_configured;
-};
+#define CSC_SENSOR_MODE_CADENCE (0U)
+#define CSC_SENSOR_MODE_SPEED   (1U)
 
 
+/****************
+ * STRUCTS/ENUMS
+ ******************/
 struct csc_meas_notify {
     uint8_t flags;      /* type of data present */
     uint8_t data[];
@@ -111,54 +100,38 @@ struct sc_ctrl_point_indicate {
 }__packed;
 
 
-/*****************
+
+
+/*******************
  * PUBLIC APIs
- ****************/
-
-
-/**
- * @brief Initialize and configure the BLE stack and service information
- * 
- * 
- */
-int csc_ble_init(void);
+ *******************/
 
 
 
 /**
- * @brief Starts BLE peripheral advertising with timeout
+ * @brief Initialize the BLE stack for the central device
  * 
- * This function begins the BLE peripheral ADV phase, if no
- * connection is established within 30 seconds timeout and 
- * start will need to be triggered again
  * 
  */
-void csc_ble_start_adv(void);
+int csc_client_init(void);
 
 
 /**
- * @brief Notify central of wheel/crank events, e.g. increase in CWR/CCR
+ * @brief Client scan for CSC sensor
  * 
- * This function sends a BLE notification to the central device with either 
- * CWR + LWET OR CCR + LCET. The specific values will depend on the configuration
- * mode of the sensor e.g. cadence mode or speed mode.
  * 
- * @param cwr cumulative wheel revolution count
- * @param lwet last wheel event timestamp
- * @param ccr cumulative crank revolution count
- * @param lcet last crank event timestamp
  */
-void csc_ble_measurement_notify(uint32_t cwr, uint16_t lwet, uint32_t ccr, uint16_t lcet);
+int csc_client_scan(void);
+
 
 
 /**
- * @brief Check whether sensor BLE conn has been established
+ * @brief Client disconnect from CSC sensor
  * 
- * This function should be called before any calls to 
- * csc_ble_measurement_notify.
  * 
- * @return 1 if connection has been established; else 0
+ * 
  */
-uint8_t csc_ble_is_connected(void);
+int csc_client_disconnect(void);
 
-#endif
+
+#endif /* CSC_CLI_H */

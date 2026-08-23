@@ -6,6 +6,11 @@ project(csc_central)
 
 target_sources(app PRIVATE 
 src/main.c
+src/drivers/csc_ble_cli.c
+src/drivers/barometric_alt.c
+src/drivers/display.c
+src/app/csc_computer.c
+src/app/statistics.c
 )
 target_include_directories(app PRIVATE 
 include
