@@ -186,12 +186,6 @@ static bool ad_found(struct bt_data *data, void *user_data) {
             create_param = BT_CONN_LE_CREATE_CONN;
 
             struct bt_conn **p_conn = connections[0].p_conn == NULL ? &connections[0].p_conn : &connections[1].p_conn;
-            // if (p_conn == NULL) {
-            //     LOG_WRN("NO FREE CONNECTIONS AVAILABLE\n\r");
-            //     cont = false;
-            //     return cont;
-            // }
-
             err = bt_conn_le_create((bt_addr_le_t *)user_data, create_param, param, p_conn);
             if (err)
                 LOG_ERR("CONN FAILED TO ESTABLISH\n\r");
