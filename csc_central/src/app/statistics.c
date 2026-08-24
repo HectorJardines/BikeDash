@@ -1,6 +1,10 @@
 #include "../../include/app/statistics.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/drivers/flash.h>
+#include <zephyr/storage/flash_map.h>
+#include <zephyr/kvss/nvs.h>
+#include <zephyr/device.h>
 
 LOG_MODULE_REGISTER(stats_mod, LOG_LEVEL_DBG);
 
@@ -12,6 +16,14 @@ LOG_MODULE_REGISTER(stats_mod, LOG_LEVEL_DBG);
 #define CSC_EVT_PERIOD          (1U) // measured in seconds
 #define CSC_XEVT_PERIOD         (.000976f) // measured in useconds 1/1024 seconds
 #define ELEVATION_GAIN_THRSH    (2U) // measured in meters
+
+#define NVS_PARITION            storage_partition
+#define NVS_PARTITION_DEVICE    PARTITION_DEVICE(NVS_PARITION)
+#define NVS_PARTITION_OFFSET    PARTITION_OFFSET(NVS_PARITION)
+
+#define TOTAL_DIST_ID       (1U)
+#define TOTAL_ELEV_ID       (2U)
+#define PREV_RIDE_STATS_ID  (3U)
 
 struct dist_info {
     float total_distance;
@@ -57,12 +69,17 @@ static void stats_update_elevation_gain(void);
 static void stats_update_cadence(void);
 static void stats_update_temperature(void);
 static void stats_thread_fn(void *p1, void *p2, void *p3);
+static int stats_load_nvs(float *total_gain, float *total_dist);
+static int stats_write_nvs(float *total_gain, float *total_dist);
 
 
 static struct speed_info speed;
 static struct cadence_info cadence;
 static struct dist_info distance;
 static struct env_info environment;
+
+static struct nvs_fs fs;
+static struct flash_pages_info pg_inf;
 
 K_THREAD_DEFINE(stat_thread, 1024, stats_thread_fn, 
                 NULL, NULL, NULL, 7, 0, 0);
@@ -78,10 +95,38 @@ K_MSGQ_DEFINE(stat_thread_q, sizeof(struct generic_sample), 5, 4);
  * 
  */
 int32_t cycle_stats_init(void) {
+    int32_t ret = 0;
     memset((void *)&speed, 0, sizeof(speed));
     memset((void *)&cadence, 0, sizeof(cadence));
     memset((void *)&distance, 0, sizeof(distance));
     memset((void *)&environment, 0, sizeof(environment));
+
+    fs.flash_device = NVS_PARTITION_DEVICE;
+    if (!device_is_ready(fs.flash_device)) {
+        LOG_ERR("NVS PARITION DEVICE NOT READY\n\r");
+        return 1;
+    }
+
+    fs.offset = NVS_PARTITION_OFFSET;
+    ret = flash_get_page_info_by_offs(fs.flash_device, fs.offset, &pg_inf);
+    if (ret) {
+        LOG_ERR("COULD NOT RETRIEVE PAGE INFORMATION: %d\n\r", ret);
+        return 1;
+    }
+
+    fs.sector_size = pg_inf.size;
+    fs.sector_count = 3U; // could be less 
+
+    ret = nvs_mount(&fs);
+    if (ret) {
+        LOG_ERR("COULD NOT MOUNT NVS: %d\n\r", ret);
+        return 1;
+    }
+
+    ret = stats_load_nvs(&environment.total_gain, &distance.total_distance);
+    if (ret <= 0)
+        LOG_WRN("FAILED TO LOAD STATS FROM NVS: %d\n\r", ret);
+    return ret;
 }
 
 
@@ -116,11 +161,13 @@ static void stats_thread_fn(void *p1, void *p2, void *p3) {
                 cadence.curr_cevt.revs = sample.csc.revs;
                 cadence.curr_cevt.evt_time = sample.csc.evt_time;
                 stats_update_cadence();
+                stats_update_distance();
                 break;
             case SAMPLE_CSC_SPEED:
                 speed.curr_wevt.revs = sample.csc.revs;
                 speed.curr_wevt.evt_time = sample.csc.evt_time;
                 stats_update_speed();
+                stats_update_distance();
                 break;
             case SAMPLE_PRESS_TEMP:
                 environment.curr.altitude = sample.b_alt.altitude;
@@ -133,6 +180,7 @@ static void stats_thread_fn(void *p1, void *p2, void *p3) {
                 break;
             }
         }
+        ret = stats_write_nvs(&environment.total_gain, &distance.total_distance);
     }
 }
 
@@ -151,7 +199,7 @@ static void stats_update_speed(void) {
     float evt_time_delta = (speed.curr_wevt.evt_time - speed.prev_wevt.evt_time) * CSC_XEVT_PERIOD;
     distance.sample = (speed.curr_wevt.revs * WHEEL_CIRC); // dist in CM
     distance.sample = distance.sample / evt_time_delta; // distance in kM
-    float spd = distance.sample * 0.036; // speed in km/h
+    float spd = distance.sample * 0.036f; // speed in km/h
     
     speed.prev_wevt.evt_time = speed.curr_wevt.evt_time;
     speed.prev_wevt.revs = speed.curr_wevt.revs;
@@ -234,5 +282,46 @@ static void stats_update_cadence(void) {
  */
 static void stats_update_temperature(void) {
     environment.curr_temp = environment.curr.temp;
+}
+
+
+/**
+ * @brief Loads total distance and elevation gain from NVS
+ * 
+ * This function should be called on system boot when the
+ * statistic subsystem is initialized. This function will
+ * retrieve the cumulative elevation gain and distance. 
+ * This will likely be expaded to include previous ride stats
+ * as well.
+ * 
+ */
+static int stats_load_nvs(float *total_gain, float *total_dist) {
+    int32_t ret = nvs_read(&fs, TOTAL_DIST_ID, (void *)total_dist, sizeof(*total_dist));
+    if (ret <= 0)
+        LOG_WRN("TOTAL DISTANCE VALUE NOT STORED IN NVS\n\r");
+    ret = nvs_read(&fs, TOTAL_ELEV_ID, (void *)total_gain, sizeof(*total_gain));
+    if (ret <= 0)
+        LOG_WRN("TOTAL E-GAIN VALUE NOT STORED IN NVS\n\r");
+    return ret;
+}
+
+
+/**
+ * @brief Writes total distance and elevation gain to NVS
+ * 
+ * This function should be called periodically. Best time to 
+ * call this function would be each time that an event is posted
+ * to the statistic thread, if that event results in a change of 
+ * either value.
+ * 
+ */
+static int stats_write_nvs(float *total_gain, float *total_dist) {
+    int32_t ret = nvs_write(&fs, TOTAL_ELEV_ID, (void *)total_gain, sizeof(*total_gain));
+    if (ret <= 0)
+        LOG_WRN("FAILED TO WRITE GAIN VALUE TO NVS: %d\n\r", ret);
+    ret = nvs_write(&fs, TOTAL_DIST_ID, (void *)total_dist, sizeof(*total_dist));
+    if (ret <= 0) 
+        LOG_WRN("FAILED TO WRITE DIST VALUE TO NVS: %d\n\r", ret);
+    return ret;
 }
 

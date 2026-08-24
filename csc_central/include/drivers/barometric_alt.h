@@ -7,7 +7,7 @@
  * MACROS
  **************/
 #define SEA_LVL_PRESS   (1013.25f) // hPa
-#define SEA_LVL_TEMP    (288.15)    // K
+#define SEA_LVL_TEMP    (288.15f)    // K
 #define DRY_AIR_CONST   (287.05f)  // J/(kg * K)
 #define G_ACCEL         (9.81f)    // m/s^2
 #define TEMP_LAPSE_RATE (0.0065f) // K/m
