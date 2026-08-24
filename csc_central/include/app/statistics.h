@@ -6,7 +6,9 @@
 /********************
  * MACROS
  ******************/
-
+#define SAMPLE_CSC_CADENCE  (0U)
+#define SAMPLE_CSC_SPEED    (1U)
+#define SAMPLE_PRESS_TEMP   (2U)
 
 
 
@@ -16,7 +18,8 @@
  *******************/
 struct baro_alt_samples {
     uint32_t temp;
-    uint32_t pressure;
+    uint32_t altitude;
+    uint32_t evt_time;  /* 1 SECOND UNITS */
 };
 
 struct csc_sensor_samples {
@@ -27,8 +30,8 @@ struct csc_sensor_samples {
 struct generic_sample {
     uint8_t type;
     union {
-        csc_sensor_samples csc;     /* CYCLING SPEED/CADENCE SENSORS */
-        baro_alt_samples b_alt;     /* BAROMETRIC ALTIMETER */
+        struct csc_sensor_samples csc;     /* CYCLING SPEED/CADENCE SENSORS */
+        struct baro_alt_samples b_alt;     /* BAROMETRIC ALTIMETER */
     };
 };
 

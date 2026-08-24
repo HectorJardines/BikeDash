@@ -75,10 +75,10 @@ int bmp280_get_samples(struct baro_alt_samples *samples) {
 
 static float bmp280_pressure_to_altitude(struct sensor_value *press, struct sensor_value *temp) {
     float altitude_sample = 0;
-    float press_ratio = press->val1 / SEA_LVL_PRESS;
     // value returned as kPA, need hPa for our altitude conversion
     float press_raw = (press->val1 + (press->val2 * powf(10, -6)) * 10);
 
+    float press_ratio = press_raw / SEA_LVL_PRESS;
     press_ratio = powf(press_ratio, (DRY_AIR_CONST * TEMP_LAPSE_RATE) / G_ACCEL);
     altitude_sample = (SEA_LVL_TEMP / TEMP_LAPSE_RATE) * (1 - press_ratio);
     return altitude_sample;
