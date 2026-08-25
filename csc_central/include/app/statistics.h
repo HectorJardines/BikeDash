@@ -35,6 +35,18 @@ struct generic_sample {
     };
 };
 
+struct display_stats {
+    float speed;
+    float avg_speed;
+    float elevation;
+    float total_elevation;
+    float distance;
+    float total_dist;
+    float cadence;
+    float avg_cadence;
+    float temp;
+};
+
 /********************
  * PUBLIC APIs
  ********************/

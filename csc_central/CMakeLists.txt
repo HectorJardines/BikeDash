@@ -11,6 +11,10 @@ src/drivers/barometric_alt.c
 src/drivers/display.c
 src/app/csc_computer.c
 src/app/statistics.c
+src/drivers/display.c
+src/ui/screens.c
+src/ui/ui_font_5_5_fnt.c
+src/ui/ui.c
 )
 target_include_directories(app PRIVATE 
 include

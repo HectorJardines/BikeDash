@@ -83,7 +83,7 @@ static struct flash_pages_info pg_inf;
 
 K_THREAD_DEFINE(stat_thread, 1024, stats_thread_fn, 
                 NULL, NULL, NULL, 7, 0, 0);
-K_MSGQ_DEFINE(stat_thread_q, sizeof(struct generic_sample), 5, 4);
+K_MSGQ_DEFINE(stat_thread_q, sizeof(struct generic_sample), 5, 1);
 /***********************
  * PUBLIC APIs
  ***********************/
