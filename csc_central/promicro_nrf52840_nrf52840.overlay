@@ -11,7 +11,7 @@
 		reg = <0x77>;
 	};
 	oled_disp: ssd1306@3c {
-		compatible = "solomon,ssd1306fb";
+		compatible = "solomon,ssd1306";
 		status = "okay";
 		reg = <0x3c>;
 		height = <64>;

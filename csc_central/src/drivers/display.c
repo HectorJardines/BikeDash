@@ -102,22 +102,22 @@ static void display_thread_fn(void *p1, void *p2, void *p3) {
 
 static void display_update_labels(struct display_stats *stats) {
     if (active_stats.avg_cadence != stats->avg_cadence)
-        snprintf(strs.avg_cadence_str, MAX_STR_STAT_LEN, "%d", stats->avg_cadence);
+        snprintf(strs.avg_cadence_str, MAX_STR_STAT_LEN, "%d", (int32_t)stats->avg_cadence);
     if (active_stats.cadence != stats->cadence)
-        snprintf(strs.cadence_str, MAX_STR_STAT_LEN, "%d", stats->cadence);
+        snprintf(strs.cadence_str, MAX_STR_STAT_LEN, "%d", (int32_t)stats->cadence);
     if (active_stats.speed != stats->speed)
-        snprintf(strs.speed_str, MAX_STR_STAT_LEN, "%d kmh", stats->speed);
+        snprintf(strs.speed_str, MAX_STR_STAT_LEN, "%d kmh", (int32_t)stats->speed);
     if (active_stats.avg_speed != stats->avg_speed)
-        snprintf(strs.avg_speed_str, MAX_STR_STAT_LEN, "avg %d kmh", stats->avg_speed);
+        snprintf(strs.avg_speed_str, MAX_STR_STAT_LEN, "avg %d kmh", (int32_t)stats->avg_speed);
     if (active_stats.distance != stats->distance)
-        snprintf(strs.distance_str, MAX_STR_STAT_LEN, "%d", stats->distance);
+        snprintf(strs.distance_str, MAX_STR_STAT_LEN, "%d", (int32_t)stats->distance);
     if (active_stats.total_dist != stats->total_dist)
-        snprintf(strs.total_distance_str, MAX_STR_STAT_LEN, "%d", stats->total_dist);
+        snprintf(strs.total_distance_str, MAX_STR_STAT_LEN, "%d", (int32_t)stats->total_dist);
     if (active_stats.elevation != stats->elevation)
-        snprintf(strs.elev_gain_str, MAX_STR_STAT_LEN, "%d", stats->elevation);
+        snprintf(strs.elev_gain_str, MAX_STR_STAT_LEN, "%d", (int32_t)stats->elevation);
     if (active_stats.total_elevation != stats->total_elevation)
-        snprintf(strs.total_gain_str, MAX_STR_STAT_LEN, "%d", stats->total_elevation);
+        snprintf(strs.total_gain_str, MAX_STR_STAT_LEN, "%d", (int32_t)stats->total_elevation);
     if (active_stats.temp != stats->temp)
-        snprintf(strs.temp_str, MAX_STR_STAT_LEN, "%d C", stats->temp);
+        snprintf(strs.temp_str, MAX_STR_STAT_LEN, "%d C", (int32_t)stats->temp);
 }
 
