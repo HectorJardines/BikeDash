@@ -47,6 +47,10 @@
 / {
 	buttons {
 		compatible = "gpio-keys";
+		btn_stopwatch_ctrl: btn_3  {
+			gpios = <&gpio0 16 GPIO_ACTIVE_LOW>;
+			label = "Btn SW Ctrl";
+		};
 		btn_scan: btn_2 {
 			gpios = <&gpio0 31 GPIO_ACTIVE_LOW>;
 			label = "Btn Scan Start";
@@ -55,7 +59,6 @@
 			gpios = <&gpio0 29 GPIO_ACTIVE_LOW>;
 			label = "Btn Reset CWR";
 		};
-
 	};
 
 	chosen {

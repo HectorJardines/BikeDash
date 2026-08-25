@@ -2,6 +2,7 @@
 #define _STATS_H
 
 #include <stdint.h>
+#include "../../include/drivers/barometric_alt.h"
 
 /********************
  * MACROS
@@ -16,16 +17,10 @@
 /******************
  * STRUCTS/ENUMS
  *******************/
-struct baro_alt_samples {
-    uint32_t temp;
-    uint32_t altitude;
-    uint32_t evt_time;  /* 1 SECOND UNITS */
-};
-
 struct csc_sensor_samples {
     uint32_t revs;
     uint16_t evt_time;
-};
+}__packed;
 
 struct generic_sample {
     uint8_t type;

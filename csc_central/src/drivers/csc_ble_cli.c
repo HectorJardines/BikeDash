@@ -1,4 +1,5 @@
 #include "../../include/drivers/csc_ble_cli.h"
+#include "../../include/common/defines.h"
 #include <zephyr/logging/log.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/hci.h>
@@ -7,12 +8,20 @@
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/sys/byteorder.h>
 
+LOG_MODULE_REGISTER(csc_cli, LOG_LEVEL_DBG);
 
+/********************
+ * MACROS / STRUCTS
+ *******************/
 #define MAX_CONNS   (2U)
 #define GET_CADENCE_CONN(connections)      (connections[0].type == CSC_SENSOR_MODE_CADENCE ? &connections[0] : connections[1].type == CSC_SENSOR_MODE_CADENCE ? &connections[1] : NULL)
 #define GET_SPEED_CONN(connections)        (connections[0].type == CSC_SENSOR_MODE_SPEED ? &connections[0] : connections[1].type == CSC_SENSOR_MODE_SPEED ? &connections[1] : NULL)
 
-LOG_MODULE_REGISTER(csc_cli, LOG_LEVEL_DBG);
+#define BLE_CONN_INT_MIN    (BT_GAP_MS_TO_CONN_INTERVAL(225U)) // in ms
+#define BLE_CONN_INT_MAX    (BT_GAP_MS_TO_CONN_INTERVAL(325U)) // in ms
+#define BLE_CONN_TIMEOUT    (BT_GAP_MS_TO_CONN_TIMEOUT(4000U))
+#define BLE_CONN_LATENCY    (4U)   // in intervals (allows peripheral to skipp 4 connection intervals if no data)
+
 
 struct csc_dev_conn_inf {
     uint8_t type;
@@ -43,7 +52,6 @@ static uint8_t cli_notify_handle(struct bt_conn *conn,
 static uint8_t cli_discover_cb(struct bt_conn *conn,
 			     const struct bt_gatt_attr *attr,
 			     struct bt_gatt_discover_params *params);
-static int cli_req_sc_cp_op(uint8_t sc_cp_op, void *data, uint8_t sens_type);
 static uint8_t cli_gatt_read_cb(struct bt_conn *conn, uint8_t err, struct bt_gatt_read_params *params, const void *data, uint16_t length);
 
 static struct csc_dev_conn_inf connections[MAX_CONNS];
@@ -105,6 +113,57 @@ int csc_client_scan(void) {
  */
 int csc_client_disconnect(void) {
 
+}
+
+
+
+
+/**
+ * @brief 
+ * 
+ * 
+ */
+int cli_req_sc_cp_op(uint8_t sc_cp_op, void *data, uint8_t sens_type) {
+    int ret;
+    struct sc_ctrl_point_write_req op_req;
+    struct bt_gatt_write_params write_req;
+    struct csc_dev_conn_inf *p_dev;
+    if (sens_type == CSC_SENSOR_MODE_CADENCE)
+        p_dev = GET_CADENCE_CONN(connections);
+    else
+        p_dev = GET_SPEED_CONN(connections);
+    
+    if (p_dev == NULL || p_dev->p_conn == NULL) {
+        LOG_WRN("SENSOR TYPE NOT CONNECTED: %d\n\r", sens_type);
+        return 1;
+    }
+
+    op_req.op = sc_cp_op;
+
+    switch (sc_cp_op) {
+    case SC_CP_OP_SET_CWR:
+        op_req.cwr = *((uint32_t *)data);
+        write_req.handle = p_dev->sc_cp_params.value_handle;
+        write_req.length = sizeof(op_req.op) + sizeof(op_req.cwr);
+        break;
+    case SC_CP_OP_UPDATE_LOC:
+        op_req.sens_loc = *((uint8_t *)data);
+        write_req.handle = p_dev->sc_cp_params.value_handle;
+        write_req.length = sizeof(op_req.op) + sizeof(op_req.sens_loc);
+        break;
+    case SC_CP_OP_REQ_SUPP_LOC:
+    default:
+        return 1; // NOT SUPPORTED RIGHT NOW
+    }
+
+    memcpy((void *)write_req.data, (const void *)&op_req, sizeof(op_req));
+    write_req.func = NULL;
+
+    ret = bt_gatt_write(p_dev->p_conn, &write_req);
+    if (ret)
+        LOG_ERR("FAILED TO WRITE TO SC CP CHRC\n\r");
+
+    return ret;
 }
 
 
@@ -180,8 +239,7 @@ static bool ad_found(struct bt_data *data, void *user_data) {
                 cont = true;
                 return cont;
             }
-            // CHANGE THESE PARAMS, CONNECTION INT SHOULD BE ABOUT 1 second
-            param = BT_LE_CONN_PARAM_DEFAULT;
+            param = BT_LE_CONN_PARAM(BLE_CONN_INT_MIN, BLE_CONN_INT_MAX, BLE_CONN_LATENCY, BLE_CONN_TIMEOUT);
             // THESE PARAMS SHOULD BE CHANGED AS WELL NEED TO READ UP ON THEM
             create_param = BT_CONN_LE_CREATE_CONN;
 
@@ -277,17 +335,17 @@ static uint8_t cli_notify_handle(struct bt_conn *conn,
 			   const void *data, uint16_t length)
 {
     int ret = 0;
+    if (length != sizeof(struct csc_meas_notify)) {
+        LOG_WRN("RX NOTIFY DATA LEN DOES NOT MATCH EXPECTED\n\r");
+        return 1;
+    }
+
     const struct csc_meas_notify *nfy = ((const struct csc_meas_notify *)data);
-    if (nfy->flags & CSC_WHEEL_REV_DATA_PRESENT) {
-        // SEND TO STATISTICS THREAD TO PROCESS
-        struct wheel_rev_notify wr_inf;
-        memcpy((void *)&wr_inf, nfy->data, sizeof(wr_inf));
-
-    } else if (nfy->flags & CSC_CRANK_REV_DATA_PRESENT) {
-        // SEND TO STATISTICS THREAD TO PROCESS
-        struct crank_rev_notify cr_inf;
-        memcpy((void *)&cr_inf, nfy->data, sizeof(cr_inf));
-
+    extern int (*comp_post_event)(uint32_t, struct csc_meas_notify *);
+    if (nfy != NULL) {
+        ret = comp_post_event(EVT_BLE_NFY_Msk, nfy);
+        if (ret)
+            LOG_ERR("FAILED TO POST BLE NOTIFY EVENT\n\r");
     }
 
     return ret;
@@ -414,55 +472,6 @@ static uint8_t cli_discover_cb(struct bt_conn *conn,
     }
 
     return BT_GATT_ITER_STOP;
-}
-
-
-/**
- * @brief 
- * 
- * 
- */
-static int cli_req_sc_cp_op(uint8_t sc_cp_op, void *data, uint8_t sens_type) {
-    int ret;
-    struct sc_ctrl_point_write_req op_req;
-    struct bt_gatt_write_params write_req;
-    struct csc_dev_conn_inf *p_dev;
-    if (sens_type == CSC_SENSOR_MODE_CADENCE)
-        p_dev = GET_CADENCE_CONN(connections);
-    else
-        p_dev = GET_SPEED_CONN(connections);
-    
-    if (p_dev == NULL || p_dev->p_conn == NULL) {
-        LOG_WRN("SENSOR TYPE NOT CONNECTED: %d\n\r", sens_type);
-        return 1;
-    }
-
-    op_req.op = sc_cp_op;
-
-    switch (sc_cp_op) {
-    case SC_CP_OP_SET_CWR:
-        op_req.cwr = *((uint32_t *)data);
-        write_req.handle = p_dev->sc_cp_params.value_handle;
-        write_req.length = sizeof(op_req.op) + sizeof(op_req.cwr);
-        break;
-    case SC_CP_OP_UPDATE_LOC:
-        op_req.sens_loc = *((uint8_t *)data);
-        write_req.handle = p_dev->sc_cp_params.value_handle;
-        write_req.length = sizeof(op_req.op) + sizeof(op_req.sens_loc);
-        break;
-    case SC_CP_OP_REQ_SUPP_LOC:
-    default:
-        return 1; // NOT SUPPORTED RIGHT NOW
-    }
-
-    memcpy((void *)write_req.data, (const void *)&op_req, sizeof(op_req));
-    write_req.func = NULL;
-
-    ret = bt_gatt_write(p_dev->p_conn, &write_req);
-    if (ret)
-        LOG_ERR("FAILED TO WRITE TO SC CP CHRC\n\r");
-
-    return ret;
 }
 
 

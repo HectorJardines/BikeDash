@@ -73,13 +73,13 @@ struct csc_meas_notify {
 
 struct wheel_rev_notify {
     uint32_t cumulative_wr;     /* CUMULATIVE WHEEL REVOLUTIONS */
-    uint32_t last_wet;          /* LAST WHEEL EVENT TIME */
+    uint16_t last_wet;          /* LAST WHEEL EVENT TIME */
 }__packed; /* wheel revolutions + last wheel event time*/
 
 
 struct crank_rev_notify {
     uint32_t cumulative_cr;     /* CUMULATIVE CRANK REVOLUTIONS */
-    uint32_t last_cet;          /* LAST CRANK EVENT TIME */
+    uint16_t last_cet;          /* LAST CRANK EVENT TIME */
 }__packed;
 
 
@@ -132,6 +132,10 @@ int csc_client_scan(void);
  * 
  */
 int csc_client_disconnect(void);
+
+
+
+int cli_req_sc_cp_op(uint8_t sc_cp_op, void *data, uint8_t sens_type);
 
 
 #endif /* CSC_CLI_H */

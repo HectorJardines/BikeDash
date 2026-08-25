@@ -16,6 +16,7 @@
  * STRUCTS/ENUMS
  ********************/
 struct baro_alt_samples {
+    uint32_t evt_time;
     uint32_t temp;
     float altitude;
 };

@@ -54,9 +54,10 @@ static struct stat_strings strs;
  * 
  */
 int display_init(void) {
-    int ret = 1;
+    int ret = 0;
     if (!device_is_ready(display)) {
         LOG_ERR("DISPLAY DEVICE NODE IS NOT READY\n\r");
+        ret = 1;
         return ret;
     }
 
@@ -77,6 +78,8 @@ int display_init(void) {
     lv_label_set_text_static(objects.temp_label, strs.temp_str);
     lv_label_set_text_static(objects.spd_label, strs.speed_str);
     lv_label_set_text_static(objects.avg_spd_label, strs.avg_speed_str);
+
+    return ret;
 }
 
 
