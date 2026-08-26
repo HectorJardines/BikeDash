@@ -2,6 +2,7 @@
 #include "../../include/drivers/barometric_alt.h"
 #include "../../include/app/statistics.h"
 #include "../../include/common/defines.h"
+#include "../../include/app/stopwatch.h"
 #include <zephyr/logging/log.h>
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/gpio.h>
@@ -45,6 +46,12 @@ int comp_init(void) {
     int ret = csc_client_init();
     if (ret) {
         LOG_ERR("FAILED TO INITIALIZE CSC CLIENT SUBSYTEM: %d\n\r", ret);
+        return ret;
+    }
+
+    ret = stopwatch_init();
+    if (ret) {
+        LOG_ERR("FAILED TO INTIALIZE STOPWATCH MODULE\n\r");
         return ret;
     }
 
@@ -131,6 +138,20 @@ static void comp_thread_fn(void *p1, void *p2, void *p3) {
 }
 
 
+
+/**
+ * @brief This function handles the periodic (1Hz) BLE notifications
+ * 
+ * 
+ * This function essentially handles all arbitration of sensor value 
+ * updates. The idea is that we expect a fixed 1Hz frequency
+ * from the CSC peripheral. Thus we have based all of our other readings
+ * around this event in order to avoid additional timer logic/wakeup 
+ * events. Essentially we trade a bit of precision for less wakeup of the 
+ * CPU and thus less current consumption
+ * 
+ * 
+ */
 static int comp_handle_ble_nfy_evt(const struct csc_meas_notify *rev_nfy) {
     struct generic_sample sample;
     int32_t ret = k_msgq_get(&nfy_q, (void *)rev_nfy, K_NO_WAIT);
@@ -159,6 +180,12 @@ static int comp_handle_ble_nfy_evt(const struct csc_meas_notify *rev_nfy) {
     ret = cycle_stats_post(&sample);
     if (ret)
         LOG_WRN("FAILED TO POST REV INFO\n\r");
+
+    ret = stopwatch_get_time();
+    if (ret > 0) {
+        sample.timestamp = ret;
+        ret = 0;
+    }
 
     return ret;
 }

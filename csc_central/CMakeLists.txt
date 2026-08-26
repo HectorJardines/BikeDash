@@ -15,6 +15,7 @@ src/drivers/display.c
 src/ui/screens.c
 src/ui/ui_font_5_5_fnt.c
 src/ui/ui.c
+src/app/stopwatch.c
 )
 target_include_directories(app PRIVATE 
 include

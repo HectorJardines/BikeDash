@@ -10,9 +10,7 @@
 #define SAMPLE_CSC_CADENCE  (0U)
 #define SAMPLE_CSC_SPEED    (1U)
 #define SAMPLE_PRESS_TEMP   (2U)
-
-
-
+#define SAMPLE_SW_TIME      (3U)
 
 /******************
  * STRUCTS/ENUMS
@@ -25,21 +23,10 @@ struct csc_sensor_samples {
 struct generic_sample {
     uint8_t type;
     union {
+        uint32_t timestamp;                 /* MEASURED IN SECONDS FROM SOME START EPOCH */
         struct csc_sensor_samples csc;     /* CYCLING SPEED/CADENCE SENSORS */
         struct baro_alt_samples b_alt;     /* BAROMETRIC ALTIMETER */
     };
-};
-
-struct display_stats {
-    float speed;
-    float avg_speed;
-    float elevation;
-    float total_elevation;
-    float distance;
-    float total_dist;
-    float cadence;
-    float avg_cadence;
-    float temp;
 };
 
 /********************

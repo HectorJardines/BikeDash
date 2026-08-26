@@ -10,8 +10,18 @@
 /*********************
  * STRUCTS/ENUMS
  *********************/
-
-
+struct display_stats {
+    uint32_t timestamp;
+    float speed;
+    float avg_speed;
+    float elevation;
+    float total_elevation;
+    float distance;
+    float total_dist;
+    float cadence;
+    float avg_cadence;
+    float temp;
+};
 
 
 /*********************
@@ -36,7 +46,7 @@ int display_init(void);
  * to the display thread.
  * 
  */
-int display_signal_update(void);
+int display_signal_update(struct display_stats *stats);
 
 
 

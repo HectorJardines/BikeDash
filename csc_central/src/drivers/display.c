@@ -15,6 +15,11 @@ LOG_MODULE_REGISTER(disp_mod, LOG_LEVEL_DBG);
 #define DISP_THREAD_PRIO        (7U)
 #define DISP_Q_MAX_LEN          (2U)
 #define MAX_STR_STAT_LEN        (9U)
+
+// CONVERT SECONDS SINCE START EPOCH TO SW VALUE
+#define SEC_TO_HOURS(sec)       (sec / 3600)
+#define SEC_TO_MINUTES(sec)     ((sec / 60) % 60)
+#define SEC_TO_SECS(sec)        (sec % 60)
 // #define MAX_STR_TOTAL_LEN       (9U) // total elevation/distance can be much larger
 
 struct stat_strings {
@@ -27,6 +32,7 @@ struct stat_strings {
     char distance_str[MAX_STR_STAT_LEN];
     char total_distance_str[MAX_STR_STAT_LEN];
     char temp_str[MAX_STR_STAT_LEN];
+    char time_str[MAX_STR_STAT_LEN];
 };
 
 /**********************
@@ -78,7 +84,25 @@ int display_init(void) {
     lv_label_set_text_static(objects.temp_label, strs.temp_str);
     lv_label_set_text_static(objects.spd_label, strs.speed_str);
     lv_label_set_text_static(objects.avg_spd_label, strs.avg_speed_str);
+    lv_label_set_text_static(objects.sw_label, strs.time_str);
 
+    return ret;
+}
+
+
+
+/**
+ * @brief This function posts updated stats to display thread
+ * 
+ * 
+ * The stats thread will post updated statistics
+ * to the display thread.
+ * 
+ */
+int display_signal_update(struct display_stats *stats) {
+    int32_t ret = k_msgq_put(&disp_q, (const void *)stats, K_NO_WAIT);
+    if (ret)
+        LOG_WRN("FAILED TO PUSH STATS TO DISPLAY QUEUE\n\r");
     return ret;
 }
 
@@ -122,5 +146,7 @@ static void display_update_labels(struct display_stats *stats) {
         snprintf(strs.total_gain_str, MAX_STR_STAT_LEN, "%d", (int32_t)stats->total_elevation);
     if (active_stats.temp != stats->temp)
         snprintf(strs.temp_str, MAX_STR_STAT_LEN, "%d C", (int32_t)stats->temp);
+    if (active_stats.timestamp != stats->timestamp)
+        snprintf(strs.time_str, MAX_STR_STAT_LEN, "%02d %02d %02d", SEC_TO_HOURS(stats->timestamp), SEC_TO_MINUTES(stats->timestamp), SEC_TO_SECS(stats->timestamp));
 }
 

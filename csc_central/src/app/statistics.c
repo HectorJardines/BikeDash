@@ -1,4 +1,5 @@
 #include "../../include/app/statistics.h"
+#include "../../include/drivers/display.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/flash.h>
@@ -77,6 +78,7 @@ static struct speed_info speed;
 static struct cadence_info cadence;
 static struct dist_info distance;
 static struct env_info environment;
+static uint32_t sw_timestamp;
 
 static struct nvs_fs fs;
 static struct flash_pages_info pg_inf;
@@ -176,8 +178,20 @@ static void stats_thread_fn(void *p1, void *p2, void *p3) {
                 stats_update_elevation_gain();
                 stats_update_temperature();
                 break;
+            case SAMPLE_SW_TIME:
+                sw_timestamp = sample.timestamp;
+                break;
             default:
                 break;
+            }
+
+            if (k_msgq_num_used_get(&stat_thread_q) == 0) {
+                struct display_stats disp_stat = {.avg_cadence = cadence.avg_cadence, .cadence = cadence.current_cadence,
+                                                .avg_speed = speed.avg_speed, .speed = speed.current_speed,
+                                                .elevation = environment.curr_gain, .total_elevation = environment.total_gain,
+                                                .distance = distance.curr_ride_distance, .total_dist = distance.total_distance,
+                                                .temp = environment.curr_temp, .timestamp = sw_timestamp};
+                display_signal_update(&disp_stat);
             }
         }
         ret = stats_write_nvs(&environment.total_gain, &distance.total_distance);
