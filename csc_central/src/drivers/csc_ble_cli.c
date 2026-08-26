@@ -54,6 +54,9 @@ static uint8_t cli_discover_cb(struct bt_conn *conn,
 			     struct bt_gatt_discover_params *params);
 static uint8_t cli_gatt_read_cb(struct bt_conn *conn, uint8_t err, struct bt_gatt_read_params *params, const void *data, uint16_t length);
 
+
+
+static struct csc_ble_cli_inf client;
 static struct csc_dev_conn_inf connections[MAX_CONNS];
 #define GET_CONN_STRUCT(conn)       (conn == connections[0].p_conn ? &connections[0] : conn == connections[1].p_conn ? &connections[1] : NULL)
 
@@ -61,7 +64,6 @@ BT_CONN_CB_DEFINE(conn_cbs) = {
     .connected      = on_connected,
     .disconnected   = on_disconnected
 };
-
 static struct bt_le_scan_cb scan_cbs = {
     .timeout        = cli_scan_timeout
 };
@@ -87,6 +89,7 @@ int csc_client_init(void) {
     if (ret)
         LOG_ERR("FAILED TO REGISTER SCAN CALLBACKS\n\r");
 
+    client.state = CLI_STATE_IDLE;
     return ret;
 }
 
@@ -97,10 +100,19 @@ int csc_client_init(void) {
  * 
  */
 int csc_client_scan(void) {
-    if (connections[0].p_conn == NULL || connections[1].p_conn == NULL)
-        cli_scan_csc_server();
-    else
+    int32_t ret = 0;
+
+    if (client.state == CLI_STATE_SCANNING || client.state == CLI_STATE_CONNECTING) {
+        LOG_WRN("CANNOT INITIATE SCAN WHEN SCAN/CONN IN PROGRESS\n\r");
+        ret = 1;
+    } else if (connections[0].p_conn == NULL || connections[1].p_conn == NULL)
+        ret = cli_scan_csc_server(); 
+    else {
         LOG_WRN("ALL CONNECTIONS IN USE CANNOT START SCAN\n\r");
+        ret = 1;
+    }
+
+    return ret;
 }
 
 
@@ -234,11 +246,13 @@ static bool ad_found(struct bt_data *data, void *user_data) {
             LOG_DBG("ADV PACKET DID NOT CONTAIN CSC UUID\n\r");
         else {
             err = bt_le_scan_stop();
+            client.state = CLI_STATE_IDLE;
             if (err) {
                 LOG_ERR("FAILED TO STOP BT LE SCAN\n\r");
                 cont = true;
                 return cont;
             }
+            client.state = CLI_STATE_CONNECTING;
             param = BT_LE_CONN_PARAM(BLE_CONN_INT_MIN, BLE_CONN_INT_MAX, BLE_CONN_LATENCY, BLE_CONN_TIMEOUT);
             // THESE PARAMS SHOULD BE CHANGED AS WELL NEED TO READ UP ON THEM
             create_param = BT_CONN_LE_CREATE_CONN;
@@ -268,13 +282,14 @@ static void cli_device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type
 
 
 static void cli_scan_timeout(void) {
-
+    LOG_WRN("SCAN TIMEOUT, COULD NOT ESTABLISH CONN IN 30s\n\r");
+    client.state = CLI_STATE_IDLE;
 }
 
 
 static void on_connected(struct bt_conn *conn, uint8_t conn_err) {
     int ret; 
-
+    client.state = CLI_STATE_IDLE;
     if (conn_err) {
         LOG_ERR("CONN FAILED TO ESTABLISH\n\r");
 
@@ -286,7 +301,7 @@ static void on_connected(struct bt_conn *conn, uint8_t conn_err) {
         return;
     }
 
-
+    
     LOG_INF("CONNECTION ESTABLISHED\n\r");
 
     if (conn == connections[0].p_conn || conn == connections[1].p_conn) {

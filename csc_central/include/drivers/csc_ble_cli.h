@@ -62,6 +62,10 @@
 #define CSC_SENSOR_MODE_SPEED   (1U)
 
 
+
+#define CLI_STATE_IDLE          (0U)
+#define CLI_STATE_SCANNING      (1U)
+#define CLI_STATE_CONNECTING    (2U)
 /****************
  * STRUCTS/ENUMS
  ******************/
@@ -100,6 +104,10 @@ struct sc_ctrl_point_indicate {
 }__packed;
 
 
+struct csc_ble_cli_inf {
+    uint8_t state;
+    uint8_t connection_cnt;
+};
 
 
 /*******************
