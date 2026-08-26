@@ -78,14 +78,16 @@ int csc_sens_init(void) {
  * 
  */
 static void sens_thread_fn(void *a1, void *a2, void *a3) {
+    int ret = 0;
     uint32_t evts = 0x00;
     uint32_t rev_cnt = 0;
     uint16_t evt_time = 0;
     while (1) {
         evts = k_event_wait(&sens_event, EVT_BLE_CONN_ADV_START | EVT_BLE_CONN_EST | EVT_BLE_CONN_TERM, false, K_FOREVER);
         if (evts & EVT_BLE_CONN_ADV_START) {
-            csc_ble_start_adv();
-            curr_state = SENSOR_STATE_ADV;
+            ret = csc_ble_start_adv();
+            if (!ret)
+                curr_state = SENSOR_STATE_ADV;
             k_event_clear(&sens_event, EVT_BLE_CONN_ADV_START);
         } else if (evts & EVT_BLE_CONN_EST) {
             curr_state = SENSOR_STATE_CONNECTED;

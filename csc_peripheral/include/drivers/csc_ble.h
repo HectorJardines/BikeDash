@@ -133,7 +133,7 @@ int csc_ble_init(void);
  * start will need to be triggered again
  * 
  */
-void csc_ble_start_adv(void);
+int csc_ble_start_adv(void);
 
 
 /**

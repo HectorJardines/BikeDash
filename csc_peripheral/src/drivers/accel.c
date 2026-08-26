@@ -92,6 +92,13 @@ uint8_t accel_toggle_mode(void) {
 }
 
 
+/**
+ * @brief Returns the configured accelerometer mode
+ */
+uint8_t accel_get_mode(void) {
+    return h_rev.accel_mode;
+}
+
 
 /**
  * @brief Retrieves the Cumulative Wheel/Crank Revolutions

@@ -73,6 +73,11 @@ uint8_t accel_get_cxr(uint32_t *cxr);
 
 
 /**
+ * @brief Returns the configured accelerometer mode
+ */
+uint8_t accel_get_mode(void);
+
+/**
  * @brief Sets the accelerometer mode
  * 
  * This functions sets the accelerometer mode 

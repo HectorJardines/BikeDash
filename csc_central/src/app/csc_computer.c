@@ -130,9 +130,6 @@ static void comp_thread_fn(void *p1, void *p2, void *p3) {
                     LOG_WRN("FAILED TO INITIATE CSC CLIENT SCAN\n\r");
                 k_event_clear(&comp_events, EVT_SCAN_REQ_Msk);
             }
-            if (ret & EVT_SW_CHANGE_STATE_Msk) {
-                
-            }
         }
     }
 }

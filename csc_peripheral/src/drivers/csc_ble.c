@@ -21,6 +21,9 @@ LOG_MODULE_REGISTER(csc_ble, LOG_LEVEL_DBG);
 #define IND_ONGOING (1U)
 #define IND_READY   (0U)
 
+#define PERIPH_CADENCE_MODE (0U)
+#define PERIPH_SPEED_MODE   (1U)
+
 typedef struct {
     struct bt_gatt_indicate_params ind_params;
     uint8_t ind_params_data_buf[MAX_IND_DATA_LEN];
@@ -46,7 +49,7 @@ static ssize_t read_csc_feature(struct bt_conn *conn, const struct bt_gatt_attr 
 static void on_connected(struct bt_conn *conn, uint8_t err);
 static void on_disconnected(struct bt_conn *conn, uint8_t reason);
 static void on_recycled(void);
-static void bt_ready(void);
+static int bt_ready(void);
 
 
 static const struct bt_data scan_data[] = { // scan response packets
@@ -111,8 +114,9 @@ int csc_ble_init(void) {
  * start will need to be triggered again
  * 
  */
-void csc_ble_start_adv(void) {
-
+int csc_ble_start_adv(void) {
+    int32_t ret = bt_ready();
+    return ret;
 }
 
 
@@ -318,7 +322,12 @@ static ssize_t read_location(struct bt_conn *conn, const struct bt_gatt_attr *at
 static ssize_t read_csc_feature(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf,
                                 uint16_t len, uint16_t offset)
 {
-    uint16_t csc_feat = CSC_FEATURE;
+    uint16_t csc_feat;
+    extern uint8_t(*accel_get_mode)(void);
+    if (accel_get_mode() == PERIPH_CADENCE_MODE)
+        csc_feat = CSC_FEATURES_CR;
+    else
+        csc_feat = CSC_FEATURES_WR;
     return bt_gatt_attr_read(conn, attr, buf, len, offset, &csc_feat, sizeof(csc_feat));
 }
 
@@ -354,12 +363,14 @@ static void on_disconnected(struct bt_conn *conn, uint8_t reason) {
 /**
  * @brief
  */
-static void bt_ready(void) {
+static int bt_ready(void) {
     int err = bt_le_adv_start(&adv_params, adv_data, ARRAY_SIZE(adv_data), scan_data, ARRAY_SIZE(scan_data));
     if (err)
         LOG_ERR("ADV START FAILED: %d\n\r", err);
     else
         LOG_DBG("ADC START SUCCESSFUL\n\r");
+    
+    return err;
 }
 
 
