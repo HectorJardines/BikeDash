@@ -6,9 +6,10 @@
 
 #include <stdio.h>
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/drivers/spi.h>
-#include <zephyr/drivers/sensor.h>
+#include <zephyr/logging/log.h>
+#include "../include/app/csc_sensor.h"
+
+LOG_MODULE_REGISTER(main_mod, LOG_LEVEL_DBG);
 
 /* 1000 msec = 1 sec */
 #define SLEEP_TIME_MS   1000
@@ -25,26 +26,10 @@ static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 int main(void)
 {
 	int ret;
-	bool led_state = true;
+	ret = csc_sens_init();
 
-	if (!gpio_is_ready_dt(&led)) {
-		return 0;
+	if (ret) {
+		LOG_ERR("FAILED TO INTIIALIZE CSC SENSOR\n\r");
+		for (;;);	
 	}
-
-	ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
-	if (ret < 0) {
-		return 0;
-	}
-
-	while (1) {
-		ret = gpio_pin_toggle_dt(&led);
-		if (ret < 0) {
-			return 0;
-		}
-
-		led_state = !led_state;
-		printf("LED state: %s\n", led_state ? "ON" : "OFF");
-		k_msleep(SLEEP_TIME_MS);
-	}
-	return 0;
 }
