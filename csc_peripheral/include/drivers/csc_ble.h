@@ -111,6 +111,8 @@ struct sc_ctrl_point_indicate {
 }__packed;
 
 
+typedef void(*sens_conn_cb)(void);
+typedef void(*sens_disconn_cb)(void);
 /*****************
  * PUBLIC APIs
  ****************/
@@ -148,7 +150,7 @@ int csc_ble_start_adv(void);
  * @param ccr cumulative crank revolution count
  * @param lcet last crank event timestamp
  */
-void csc_ble_measurement_notify(uint32_t cwr, uint16_t lwet, uint32_t ccr, uint16_t lcet);
+int csc_ble_measurement_notify(uint32_t *cwr, uint16_t *lwet, uint32_t *ccr, uint16_t *lcet);
 
 
 /**
@@ -159,6 +161,6 @@ void csc_ble_measurement_notify(uint32_t cwr, uint16_t lwet, uint32_t ccr, uint1
  * 
  * @return 1 if connection has been established; else 0
  */
-uint8_t csc_ble_is_connected(void);
+void csc_ble_conn_cb_reg(sens_conn_cb, sens_disconn_cb);
 
 #endif

@@ -5,7 +5,7 @@
 #include <zephyr/drivers/gpio.h>
 
 LOG_MODULE_REGISTER(csc_sens, LOG_LEVEL_DBG);
-#define SENSOR_STK_SIZE     (1024U)
+#define SENSOR_STK_SIZE     (2048U)
 #define SENSOR_THRD_PRIO    (7U)
 #define RTC_NODE DT_NODELABEL(rtc2)
 
@@ -13,11 +13,14 @@ LOG_MODULE_REGISTER(csc_sens, LOG_LEVEL_DBG);
  * STATIC DECLARATIONS
  ************************/
 static void sens_thread_fn(void *a1, void *a2, void *a3);
-static void sens_tim_cb(struct k_timer *timer_id);
+static void sens_tim_cb (struct k_timer *timer_id);
 static int get_sensor_evt_time(uint16_t *evt_ticks);
 static void gpio_configure_ints(void);
 static void adv_button_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins);
 static void mode_button_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins);
+static void ble_conn_est_cb(void);
+static void ble_disconn_cb(void);
+
 
 K_THREAD_DEFINE(csc_sensor_thread, SENSOR_STK_SIZE, sens_thread_fn, NULL, NULL, NULL, SENSOR_THRD_PRIO, 0x00, 0);
 K_EVENT_DEFINE(sens_event);
@@ -27,11 +30,14 @@ K_TIMER_DEFINE(sens_data_tim, sens_tim_cb, NULL);
 static enum sensor_state curr_state = SENSOR_STATE_IDLE;
 static enum accel_mode_e curr_mode = ACCEL_MODE_CADENCE;
 
+static const struct gpio_dt_spec led_dt = GPIO_DT_SPEC_GET(DT_NODELABEL(led0), gpios);
 static const struct device *rtc_dev = DEVICE_DT_GET(RTC_NODE);
 static const struct gpio_dt_spec mode_btn = GPIO_DT_SPEC_GET(DT_NODELABEL(btn_mode), gpios);
 static const struct gpio_dt_spec adv_btn = GPIO_DT_SPEC_GET(DT_NODELABEL(btn_adv), gpios);
 static struct gpio_callback mode_btn_cb;
 static struct gpio_callback adv_btn_cb;
+
+static volatile uint8_t tim_cnt = 0;
 /********************
  * PUBLIC APIs
  ********************/
@@ -62,6 +68,7 @@ int csc_sens_init(void) {
     }
 
     gpio_configure_ints();
+    csc_ble_conn_cb_reg(ble_conn_est_cb, ble_disconn_cb);
     
     LOG_DBG("SUCCESSFULLY INITIALIZED CSC SENSOR\n\r");
     return 0;
@@ -83,28 +90,32 @@ static void sens_thread_fn(void *a1, void *a2, void *a3) {
     uint32_t rev_cnt = 0;
     uint16_t evt_time = 0;
     while (1) {
-        evts = k_event_wait(&sens_event, EVT_BLE_CONN_ADV_START | EVT_BLE_CONN_EST | EVT_BLE_CONN_TERM, false, K_FOREVER);
+        evts = k_event_wait_safe(&sens_event, EVT_MASK_ALL, false, K_FOREVER);
         if (evts & EVT_BLE_CONN_ADV_START) {
             ret = csc_ble_start_adv();
             if (!ret)
                 curr_state = SENSOR_STATE_ADV;
-            k_event_clear(&sens_event, EVT_BLE_CONN_ADV_START);
-        } else if (evts & EVT_BLE_CONN_EST) {
+        } 
+        if (evts & EVT_BLE_CONN_EST) {
             curr_state = SENSOR_STATE_CONNECTED;
             k_timer_start(&sens_data_tim, K_SECONDS(1), K_SECONDS(1));
-            k_event_clear(&sens_event, EVT_BLE_CONN_EST);
-        } else if (evts & EVT_BLE_SEND_DATA) {
-            accel_get_cxr(&rev_cnt);
-            get_sensor_evt_time(&evt_time);
+        } 
+        if (evts & EVT_BLE_SEND_DATA) {
+            gpio_pin_toggle_dt(&led_dt);
+            // accel_get_cxr(&rev_cnt);
+            // get_sensor_evt_time(&evt_time);
+            rev_cnt++;
+            evt_time++;
             if (curr_mode == ACCEL_MODE_CADENCE)
-                csc_ble_measurement_notify(0, 0, rev_cnt, evt_time);
+                ret = csc_ble_measurement_notify(NULL, NULL, &rev_cnt, &evt_time);
             else
-                csc_ble_measurement_notify(rev_cnt, evt_time, 0, 0);
-            k_event_clear(&sens_event, EVT_BLE_SEND_DATA);
-        } else if (evts & EVT_BLE_CONN_TERM) {
+                ret = csc_ble_measurement_notify(&rev_cnt, &evt_time, NULL, NULL);
+            if (ret < 0)
+                for(;;);
+        } 
+        if (evts & EVT_BLE_CONN_TERM) {
             curr_state = SENSOR_STATE_IDLE;
             k_timer_stop(&sens_data_tim);
-            k_event_clear(&sens_event, EVT_BLE_CONN_TERM);
         }
     }
 }
@@ -140,6 +151,10 @@ static void gpio_configure_ints(void) {
  * 
  */
 static void adv_button_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins) {
+    static int64_t last_tick = 0;
+    int64_t curr_tick = k_uptime_get();
+    if (curr_tick - last_tick < 100)
+        return; // debounce
     if (curr_state == SENSOR_STATE_ADV) {
         LOG_WRN("ADV CURRENTLY ONGOING, CANNOT START AGAIN\n\r");
         return;
@@ -199,4 +214,31 @@ static void mode_button_handler(const struct device *dev, struct gpio_callback *
  */
 static void sens_tim_cb(struct k_timer *timer_id) {
     k_event_post(&sens_event, EVT_BLE_SEND_DATA);
+    tim_cnt++;
 }
+
+
+/**
+ * @brief CSC Sensor Task signal connected event
+ * 
+ * Callback function for BLE sensor connected event.
+ * This function post an event to the CSC sensor task
+ * when a connection has been established with a central
+ * 
+ */
+static void ble_conn_est_cb(void) {
+    k_event_post(&sens_event, EVT_BLE_CONN_EST);
+}
+
+/**
+ * @brief CSC Sensor Task signal disconnected event
+ * 
+ * Callback function for BLE sensor disconnected event.
+ * This function posts an event to the CSC sensor task
+ * upon disconnection from a central
+ * 
+ */
+static void ble_disconn_cb(void) {
+    k_event_post(&sens_event, EVT_BLE_CONN_TERM);
+}
+

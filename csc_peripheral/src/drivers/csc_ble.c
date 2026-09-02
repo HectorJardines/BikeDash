@@ -10,7 +10,6 @@
 
 LOG_MODULE_REGISTER(csc_ble, LOG_LEVEL_DBG);
 
-
 /***********************
  * MACROS/TYPEDEFS
  ***********************/
@@ -29,6 +28,13 @@ typedef struct {
     uint8_t ind_params_data_buf[MAX_IND_DATA_LEN];
     uint8_t ind_ongoing;
 } csc_ind_handle_t;
+
+static sens_conn_cb csc_sens_conn_cb;
+static sens_disconn_cb csc_sens_disconn_cb;
+static volatile int nfy_cnt = 0;
+
+#define SIGNAL_CONN_EST()   csc_sens_conn_cb()
+#define SIGNAL_CONN_TERM()  csc_sens_disconn_cb()
 
 /*************************
  * STATIC DECLARATIONS
@@ -62,8 +68,11 @@ static const struct bt_data adv_data[] = {
 
 
 static struct csc_sensor_info_t sens;
-static struct bt_le_adv_param adv_params;
-static csc_ind_handle_t h_ind;
+static struct bt_le_adv_param *adv_params = BT_LE_ADV_PARAM(BT_LE_ADV_OPT_CONN, 
+                                            800,
+                                            1000,
+                                            NULL);
+static csc_ind_handle_t h_ind;      
 static struct bt_conn_cb conn_cbs = {
     .connected          = on_connected,
     .disconnected       = on_disconnected,
@@ -102,6 +111,7 @@ int csc_ble_init(void) {
         printk("ERROR SETTING CONN CBS\n\r"); 
         return err;
     }
+
     return err;
 }
 
@@ -123,21 +133,23 @@ int csc_ble_start_adv(void) {
 /**
  * @brief
  */
-void csc_ble_measurement_notify(uint32_t cwr, uint16_t lwet, uint32_t ccr, uint16_t lcet) {
+int csc_ble_measurement_notify(uint32_t *cwr, uint16_t *lwet, uint32_t *ccr, uint16_t *lcet) {
+    if (!sens.meas_notify_configured)
+        return 1;
     struct csc_meas_notify *meas_nfy;
     uint8_t buf[sizeof(*meas_nfy) + 
-                (cwr != 0 ? sizeof(struct wheel_rev_notify) : 0) +
-                (ccr != 0 ? sizeof(struct crank_rev_notify) : 0)];
+                (cwr != NULL ? sizeof(struct wheel_rev_notify) : 0) + 
+                (ccr != NULL ? sizeof(struct crank_rev_notify) : 0)];
     uint16_t len = 0U;
-    
+
     meas_nfy = (void *)buf;
     meas_nfy->flags = 0x00;
 
     if (cwr) {
         meas_nfy->flags |= CSC_WHEEL_REV_DATA_PRESENT;
         struct wheel_rev_notify wr_nfy;
-        wr_nfy.cumulative_wr = sys_cpu_to_le32(cwr); // expects little endian data
-        wr_nfy.last_wet = sys_cpu_to_le16(lwet);
+        wr_nfy.cumulative_wr = sys_cpu_to_le32(*cwr); // expects little endian data
+        wr_nfy.last_wet = sys_cpu_to_le16(*lwet);
 
         memcpy((void *)meas_nfy->data, (const void *)&wr_nfy, sizeof(wr_nfy));
         len += sizeof(wr_nfy);
@@ -146,13 +158,16 @@ void csc_ble_measurement_notify(uint32_t cwr, uint16_t lwet, uint32_t ccr, uint1
     if (ccr) {
         meas_nfy->flags |= CSC_CRANK_REV_DATA_PRESENT;
         struct crank_rev_notify cr_nfy;
-        cr_nfy.cumulative_cr = ccr;
-        cr_nfy.last_cet = lcet;
+        cr_nfy.cumulative_cr = sys_cpu_to_le32(*ccr);
+        cr_nfy.last_cet = sys_cpu_to_le16(*lcet);
 
         memcpy((void *)(meas_nfy->data + len), (const void *)&cr_nfy, sizeof(cr_nfy));
     }
 
-    bt_gatt_notify(sens.sens_conn, &csc_svc.attrs[1], buf, sizeof(buf));
+    int ret = bt_gatt_notify(sens.sens_conn, &csc_svc.attrs[1], buf, sizeof(buf));
+    if (!ret) {
+        nfy_cnt++;
+    }
 }
 
 
@@ -164,10 +179,12 @@ void csc_ble_measurement_notify(uint32_t cwr, uint16_t lwet, uint32_t ccr, uint1
  * 
  * @return 1 if connection has been established; else 0
  */
-uint8_t csc_ble_is_connected(void) {
-    return sens.sens_conn != NULL;
+void csc_ble_conn_cb_reg(sens_conn_cb conn, sens_disconn_cb disconn) {
+    if (conn == NULL || disconn == NULL)
+        LOG_WRN("NO CONNECTION CB REGISTERD\n\r");
+    csc_sens_conn_cb = conn;
+    csc_sens_disconn_cb = disconn;
 }
-
 
 /******************
  * STATIC DEFS
@@ -346,6 +363,7 @@ static void on_connected(struct bt_conn *conn, uint8_t err) {
     }
     LOG_INF("CONNECTION ESTABLISHED\n\r");
     sens.sens_conn = bt_conn_ref(conn);
+    SIGNAL_CONN_EST();
 }
 
 
@@ -357,6 +375,7 @@ static void on_disconnected(struct bt_conn *conn, uint8_t reason) {
     LOG_INF("BLE CONENCTION TERMINATED, REASON: %d\n\r", reason);
     bt_conn_unref(conn);
     sens.sens_conn = NULL;
+    SIGNAL_CONN_TERM();
 }
 
 
@@ -364,7 +383,7 @@ static void on_disconnected(struct bt_conn *conn, uint8_t reason) {
  * @brief
  */
 static int bt_ready(void) {
-    int err = bt_le_adv_start(&adv_params, adv_data, ARRAY_SIZE(adv_data), scan_data, ARRAY_SIZE(scan_data));
+    int err = bt_le_adv_start(adv_params, adv_data, ARRAY_SIZE(adv_data), scan_data, ARRAY_SIZE(scan_data));
     if (err)
         LOG_ERR("ADV START FAILED: %d\n\r", err);
     else
