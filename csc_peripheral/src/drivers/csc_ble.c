@@ -76,6 +76,7 @@ static csc_ind_handle_t h_ind;
 static struct bt_conn_cb conn_cbs = {
     .connected          = on_connected,
     .disconnected       = on_disconnected,
+    .recycled           = on_recycled
 };
 /*********************
  * PUBLIC APIs
@@ -164,10 +165,7 @@ int csc_ble_measurement_notify(uint32_t *cwr, uint16_t *lwet, uint32_t *ccr, uin
         memcpy((void *)(meas_nfy->data + len), (const void *)&cr_nfy, sizeof(cr_nfy));
     }
 
-    int ret = bt_gatt_notify(sens.sens_conn, &csc_svc.attrs[1], buf, sizeof(buf));
-    if (!ret) {
-        nfy_cnt++;
-    }
+    return bt_gatt_notify(sens.sens_conn, &csc_svc.attrs[1], buf, sizeof(buf));
 }
 
 
@@ -352,7 +350,6 @@ static ssize_t read_csc_feature(struct bt_conn *conn, const struct bt_gatt_attr 
 
 /* BLE SETUP FUNCTIONS */
 
-
 /**
  * @brief
  */
@@ -369,12 +366,30 @@ static void on_connected(struct bt_conn *conn, uint8_t err) {
 
 
 /**
- * @brief
+ * @brief BLE disconnected callback
+ * 
+ * Called when the BLE connection object state 
+ * changes to disconnected state. Object resource
+ * is not reclaimed yet.
+ * 
  */
 static void on_disconnected(struct bt_conn *conn, uint8_t reason) {
     LOG_INF("BLE CONENCTION TERMINATED, REASON: %d\n\r", reason);
     bt_conn_unref(conn);
     sens.sens_conn = NULL;
+}
+
+
+/**
+ * @brief Connection object recycled callback
+ * 
+ * Connection object resource reclaimed, peripheral
+ * is free to allocate a new connection object
+ * i.e. free to start the advertising process again
+ * 
+ */
+static void on_recycled(void) {
+    LOG_INF("CONNECTION OBJECT RECYCLED, CAN ALLOCAT NEW CONN\n\r");
     SIGNAL_CONN_TERM();
 }
 

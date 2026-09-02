@@ -49,4 +49,8 @@
 			label = "Btn Adv Start";
 		};
 	};
+
+	chosen {
+		zephyr,console = &uart0;
+	};
 };

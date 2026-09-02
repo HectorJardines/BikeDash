@@ -1,5 +1,6 @@
 #include "../../include/drivers/accel.h"
 #include <zephyr/logging/log.h>
+#include <math.h>
 
 LOG_MODULE_REGISTER(acc_logging, LOG_LEVEL_DBG);
 
@@ -15,7 +16,6 @@ LOG_MODULE_REGISTER(acc_logging, LOG_LEVEL_DBG);
 #define IS_IN_QUADRANT1(A, B) ((A) < -NOISE_MARGIN && (B) < -NOISE_MARGIN)
 #define IS_IN_QUADRANT2(A, B) ((A) < -NOISE_MARGIN && (B) > NOISE_MARGIN)
 #define IS_IN_QUADRANT3(A, B) ((A) > NOISE_MARGIN && (B) > NOISE_MARGIN)
-
 
 
 /************************
@@ -83,10 +83,15 @@ uint8_t accel_init(void) {
  * 
  */
 uint8_t accel_toggle_mode(void) {
-    if (h_rev.accel_mode == ACCEL_MODE_CADENCE)
+    if (h_rev.accel_mode == ACCEL_MODE_CADENCE) {
         h_rev.accel_mode = ACCEL_MODE_SPEED;
-    else
+        h_rev.wr_inf.cwr = 0;
+    }
+    else {
         h_rev.accel_mode = ACCEL_MODE_CADENCE;
+        h_rev.cr_inf.ccr = 0;
+    }
+    h_rev.bound_crossed_cnt = 0;
 
     return h_rev.accel_mode;
 }
@@ -124,15 +129,6 @@ uint8_t accel_get_cxr(uint32_t *cxr) {
  * STATIC DEFS
  *********************/
 
-/**
- * @brief Configure BMI160 undersampling # averaging samples
- * 
- * 
- */
-static void accel_configure(void) {
-
-}
-
 
 /**
  * @brief Retrieves accel XYZ sensor samples 
@@ -152,13 +148,17 @@ static void accel_data_ready_cb(const struct device *dev,
 
     ret = sensor_channel_get(dev_bmi160, SENSOR_CHAN_ACCEL_X, &sample_x);
     if (ret) goto cleanup;
+    float acc_x = sensor_value_to_double(&sample_x);
     ret = sensor_channel_get(dev_bmi160, SENSOR_CHAN_ACCEL_Y, &sample_y);
     if (ret) goto cleanup;
+    float acc_y = sensor_value_to_double(&sample_y);
     ret = sensor_channel_get(dev_bmi160, SENSOR_CHAN_ACCEL_Z, &sample_z);
     if (ret) goto cleanup;
+    float acc_z = sensor_value_to_double(&sample_z);
 
-    accel_data_to_revs(sample_x.val1, sample_y.val1); // prob have to change axes for cadence/speed sensors
-
+    LOG_DBG("ACC X: %.4f, ACC Y: %.4f, ACC Z: %.4f", acc_x, acc_y, acc_z);
+    accel_data_to_revs(acc_x, acc_z); // prob have to change axes for cadence/speed sensors
+    (void)acc_z;
     return;
 cleanup:
     LOG_ERR("ERROR IN READING SENSOR SAMPLES: %d\n\r", ret);
@@ -191,6 +191,7 @@ static void accel_data_to_revs(uint32_t axis_a, uint32_t axis_b) {
             default:
                 break;
             }
+            h_rev.bound_crossed_cnt = 0;
         }
     }
 }
