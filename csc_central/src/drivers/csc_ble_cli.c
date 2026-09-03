@@ -62,7 +62,8 @@ static struct csc_dev_conn_inf connections[MAX_CONNS];
 
 BT_CONN_CB_DEFINE(conn_cbs) = {
     .connected      = on_connected,
-    .disconnected   = on_disconnected
+    .disconnected   = on_disconnected,
+    .recycled       = on_recycled
 };
 static struct bt_le_scan_cb scan_cbs = {
     .timeout        = cli_scan_timeout
@@ -341,6 +342,11 @@ static void on_disconnected(struct bt_conn *conn, uint8_t reason) {
 
     LOG_DBG("Connection terminated: %d\n\r", reason);
     return;
+}
+
+
+static void on_recycled(void) {
+
 }
 
 

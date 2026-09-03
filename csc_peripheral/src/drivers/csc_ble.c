@@ -68,7 +68,7 @@ static const struct bt_data adv_data[] = {
 
 
 static struct csc_sensor_info_t sens;
-static struct bt_le_adv_param *adv_params = BT_LE_ADV_PARAM(BT_LE_ADV_OPT_CONN, 
+static const struct bt_le_adv_param *adv_params = BT_LE_ADV_PARAM(BT_LE_ADV_OPT_CONN, 
                                             800,
                                             1000,
                                             NULL);
@@ -266,7 +266,7 @@ static void csc_cp_indicate_cb(struct bt_conn *conn, struct bt_gatt_indicate_par
 static ssize_t write_ctrl_point(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf,
                                 uint16_t len, uint16_t offset, uint8_t flags) 
 {
-    struct sc_ctrl_point_write_req *req = buf;
+    struct sc_ctrl_point_write_req *req = (struct sc_ctrl_point_write_req *)buf;
     uint8_t status;
     int i;
 

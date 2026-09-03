@@ -21,7 +21,6 @@ LOG_MODULE_REGISTER(acc_logging, LOG_LEVEL_DBG);
 /************************
  * STATIC DECLARATIONS
  ************************/
-static void accel_configure(void);
 static void accel_data_ready_cb(const struct device *dev,
 					 const struct sensor_trigger *trigger);
 static void accel_data_to_revs(uint32_t axis_a, uint32_t axis_b);

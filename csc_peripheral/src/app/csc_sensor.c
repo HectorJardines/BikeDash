@@ -70,7 +70,7 @@ int csc_sens_init(void) {
         return 1;
     }
 
-    if (!gpio_is_ready_dt(&mode_btn) || !gpio_is_ready_dt(&adv_btn)) {
+    if (!gpio_is_ready_dt(&mode_btn.gpio) || !gpio_is_ready_dt(&adv_btn.gpio)) {
         LOG_ERR("GPIO PERIPHERAL NOT READY\n\r");
         return 1;
     }
@@ -109,7 +109,8 @@ static void sens_thread_fn(void *a1, void *a2, void *a3) {
     uint32_t rev_cnt = 0;
     uint16_t evt_time = 0;
     while (1) {
-        evts = k_event_wait_safe(&sens_event, EVT_MASK_ALL, false, K_FOREVER);
+        evts = k_event_wait_safe(&sens_event, EVT_MASK_ALL, false, K_MSEC(200));
+        gpio_pin_toggle_dt(&led_dt);
         if (evts & EVT_BLE_CONN_ADV_START) {
             ret = csc_ble_start_adv();
             if (!ret)
@@ -120,7 +121,6 @@ static void sens_thread_fn(void *a1, void *a2, void *a3) {
             k_timer_start(&sens_data_tim, K_SECONDS(BLE_NFY_PERIOD_S), K_SECONDS(BLE_NFY_PERIOD_S));
         } 
         if (evts & EVT_BLE_SEND_DATA) {
-            gpio_pin_toggle_dt(&led_dt);
             ret = accel_get_cxr(&rev_cnt);
             if (ret) continue;
             ret = get_sensor_evt_time(&evt_time);
